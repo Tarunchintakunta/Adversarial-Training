@@ -1,0 +1,22 @@
+\section{Conclusion and Future Work}
+\label{sec:Conclusion}
+
+\subsection{Conclusion}
+This dissertation presented a comprehensive study on the robustness of deep residual learning for Automatic Speaker Verification (ASV) spoofing detection. By implementing a ResNet-18 architecture and subjecting it to rigorous adversarial evaluation using the ASVSpoof 2019 dataset, we arrived at several key conclusions:
+\begin{enumerate}
+    \item \textbf{ResNet Effectiveness:} ResNet-18 is a highly effective architecture for spoofing detection, achieving $\sim$99\% F1-score on standard benchmarks.
+    \item \textbf{Adversarial Vulnerability:} Despite its standard performance, the model is critically vulnerable to gradient-based attacks. The Fast Gradient Sign Method (FGSM) proved particularly devastating, raising the Equal Error Rate (EER) to over 90\%. This indicates that standard training protocols do not bestow robustness against worst-case perturbations.
+    \item \textbf{Metric Discrepancies:} The study highlighted the importance of using threshold-independent metrics like EER alongside standard classification accuracy. A system can appear accurate while having a completely compromised security threshold.
+\end{enumerate}
+
+\subsection{Future Work}
+To address the identified vulnerabilities, future research should focus on:
+\begin{itemize}
+    \item \textbf{Adversarial Training:} Explicitly training the model on PGD and FGSM examples to harden the decision boundary. \cite{madry2017towards} suggests this is the only principled defense against first-order attacks.
+    \item \textbf{Audio Forensics:} Developing explainable AI techniques (e.g., Grad-CAM) to visualize exactly which parts of the spectrogram are targeted by adversaries.
+    \item \textbf{Self-Supervised Learning:} Investigating if self-supervised pre-training (e.g., Wav2Vec 2.0, HuBERT) learns more robust audio representations that are less susceptible to simple gradient attacks.
+    \item \textbf{Differentiable Front-ends:} Making the STFT and Mel-filterbank layers differentiable to allow for end-to-end adversarial training from the raw waveform level.
+\end{itemize}
+
+\subsection{Final Remarks}
+As AI-synthesized speech becomes indistinguishable from human speech, the arms race between spoofing generation and detection will intensify. This research underscores that high accuracy on static benchmarks is insufficient for security-critical applications; adversarial robustness must be a primary design criterion for the next generation of ASV systems.
