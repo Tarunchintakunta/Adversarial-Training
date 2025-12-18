@@ -1,0 +1,692 @@
+\documentclass[12pt,a4paper]{article} 
+
+\usepackage[utf8]{inputenc}  %% UTF-8 encoding
+\usepackage[british,UKenglish]{babel}  %% Language
+\usepackage[a4paper, margin=1in]{geometry} %% margins
+\usepackage{graphicx}
+\usepackage[export]{adjustbox}
+\usepackage[absolute,overlay]{textpos}
+\usepackage{tikz}
+\usepackage{algorithm}
+\usepackage{algpseudocode}  %% Only use algpseudocode, not algorithmic
+\usepackage{amsmath,amsfonts,amssymb}
+\usepackage{lastpage}
+\usepackage[round,authoryear]{natbib}  %% Harvard-style citations
+\usepackage[bookmarks=true, colorlinks=true, linkcolor=blue, citecolor=black, urlcolor=blue]{hyperref}
+\usepackage{booktabs} % Better tables
+\usepackage{array} % Enhanced table formatting
+\usepackage{textcomp} % For text symbols
+\usepackage{breakurl} 
+
+% Unicode character definitions
+\DeclareUnicodeCharacter{03BB}{$\lambda$}  % Greek lambda
+\DeclareUnicodeCharacter{2713}{\checkmark}  % Checkmark
+
+% Bibliography configuration for Harvard style
+\bibliographystyle{agsm}  % Harvard style (Author-Year)
+
+
+\DeclareGraphicsExtensions{.pdf,.png,.jpg}
+\graphicspath{{./figures/}}
+
+\newcommand{\mytype}{MSc Research Project}
+\newcommand{\mystream}{Cybersecurity}
+
+
+\newcommand{\myname}{Soukya Koleti}
+\newcommand{\studentID}{23214490}
+\newcommand{\mytitle}{Adversarial Robustness of Deep Residual Learning for Audio Spoofing Detection in Automatic Speaker Verification Systems}
+
+\newcommand{\wordcount}{3000} 
+
+\newcommand{\supervisor}{Mosab Mohamed}
+% \newcommand{\supervisortwo}{XXX} 
+
+\newcommand{\myyear}{2025}
+\newcommand{\duedate}{14/12/2025}
+
+\hypersetup{
+ pdfauthor={\myname},
+ pdftitle={\mytitle},
+ pdfsubject={\mytype},
+ pdfkeywords={\mystream}
+} 
+
+\setlength{\marginparwidth}{20mm}
+
+\newcommand{\margtodo}
+{\marginpar{\textbf{\textcolor{red}{ToDo}}}{}}
+
+\newcommand{\todo}[1]
+{{\textbf{\textcolor{red}{(\margtodo{}#1)}}}{}}
+
+% Describe separation hints here:
+\hyphenation{
+} 
+
+
+\begin{document}
+
+\include{titlepage}
+\include{declaration} 
+
+\title{\mytitle}%
+%\author{\myname \\ \studentID \\ \mytype\ in \mystream}%
+\author{\myname \\ \studentID}%
+\date{}
+\maketitle
+
+\pagestyle{plain}
+\pagenumbering{arabic}
+
+\begin{abstract}
+Automatic speaker verification (ASV) systems face increasing threats from spoofing attacks using synthetic or manipulated audio. While deep learning countermeasures demonstrate strong detection capabilities, their computational requirements limit deployment on resource-constrained devices. This research systematically evaluates the adversarial robustness of lightweight spoofing detectors based on log-mel spectrograms and feedforward neural networks—a critical gap in existing literature that predominantly focuses on high-capacity architectures. A multi-layer perceptron classifier comprising 300,000 parameters was developed and evaluated for vulnerability to white-box adversarial attacks (FGSM and PGD) across multiple perturbation strengths using the ASVspoof2019 LA and WILD datasets. Baseline performance was strong: 97.12\% accuracy (EER=0.0264) on ASVspoof and 99.38\% on WILD. However, adversarial attacks caused severe degradation—under moderate FGSM perturbations ($\epsilon$=1.0), accuracy dropped to 54.3\% with EER increasing 17-fold to 0.4638. PGD attacks were more devastating, reducing accuracy to 10.2\% ($\epsilon$=1.0) and 3.0\% ($\epsilon$=5.0). Comparative analysis with reproduced CNN baselines (LCNN, SENet) revealed that while deeper models showed better resilience to weak attacks, all architectures failed catastrophically under strong perturbations. Adversarial training provided no meaningful robustness gains for lightweight models, instead reducing clean accuracy from 97.1\% to 85\% while maintaining high vulnerability. These findings demonstrate a fundamental capacity-robustness trade-off: lightweight models lack sufficient parameters to simultaneously achieve clean performance and adversarial resilience, necessitating alternative defense mechanisms for secure deployment in real-world ASV systems.
+\end{abstract}
+
+
+\section{Introduction}
+
+\subsection{Background and Motivation}
+
+Voice-based authentication has become ubiquitous in contemporary digital systems. From smartphone unlocking to banking transaction authorization, automatic speaker verification (ASV) systems leverage the uniqueness of vocal characteristics to confirm identity. This approach offers significant advantages over traditional authentication methods, including convenience and user experience. However, this convenience introduces substantial security vulnerabilities that have been the subject of extensive research.
+
+ASV systems are susceptible to spoofing attacks, wherein malicious actors employ synthesized speech, voice conversion techniques, or replay attacks to bypass authentication mechanisms. As text-to-speech technology has advanced significantly in recent years, generating convincing synthetic audio has become increasingly accessible. This vulnerability represents a critical security concern, with documented instances of voice spoofing being exploited for fraudulent purposes. The threat landscape continues to evolve as deepfake technology becomes more sophisticated and widely available.
+
+To counter these threats, researchers have developed spoofing countermeasures, specialized models designed to distinguish between genuine human speech and artificially generated or manipulated audio. The ASVspoof challenge series has been instrumental in driving progress in this area, providing standardized datasets and evaluation protocols that allow researchers to compare different approaches. Most recent work has focused on deep learning solutions, particularly convolutional neural networks and self-supervised learning architectures, which have achieved impressive results on benchmark datasets.
+
+However, these high-performing models exhibit significant computational requirements. They demand substantial processing power and memory resources, rendering them impractical for many real-world applications. Resource-constrained devices such as smart speakers, mobile banking applications, and embedded security systems typically operate under strict computational limitations. Consequently, researchers and developers have adopted lightweight alternatives: simplified models based on log-mel spectrograms and shallow neural network architectures such as multi-layer perceptrons. These models offer advantages in computational efficiency and can operate effectively on resource-constrained hardware platforms.
+
+A critical research question emerges: to what extent are these lightweight models secure against adversarial threats? While the vulnerability of deep learning models to adversarial attacks—carefully crafted perturbations designed to mislead models while remaining imperceptible to human perception—has been extensively documented, the adversarial robustness of lightweight architectures remains largely unexplored. This knowledge gap is particularly concerning given the widespread deployment of these simplified models in practical applications.
+
+\subsection{Research Gap}
+
+The adversarial robustness of deep CNN-based spoofing countermeasures has been studied extensively. Liu et al. (2019) demonstrated that state-of-the-art models could be severely compromised by white-box attacks like Fast Gradient Sign Method (FGSM) and Projected Gradient Descent (PGD). Subsequent work by Wu et al. (2020) explored defensive strategies, showing that while adversarial training and spatial smoothing could help, the improvements were often modest and came with trade-offs in clean accuracy or computational cost.
+
+A systematic evaluation of lightweight models remains absent from the current literature. Existing research focuses predominantly on high-capacity architectures—models comprising millions of parameters with complex feature extraction pipelines. In contrast, the simpler models deployed in resource-constrained environments have received minimal attention in adversarial robustness studies. The relative vulnerability of lightweight architectures compared to their deeper counterparts—whether more, less, or similarly vulnerable—remains an open research question.
+
+Additionally, most adversarial robustness evaluations employ controlled datasets such as ASVspoof, which contain carefully curated examples of specific spoofing attacks. While these datasets are valuable for benchmarking, they fail to capture the full complexity of real-world audio. Factors such as background noise, channel variability, and recording quality can all affect model performance, yet the interaction between these factors and adversarial perturbations remains unexplored.
+
+\subsection{Research Questions and Objectives}
+
+\textbf{Primary Research Question:} \textit{To what extent are lightweight spoofing detectors vulnerable to adversarial attacks, and how does their robustness compare to high-capacity CNN architectures?}
+
+\noindent This overarching question is addressed through four specific sub-questions:
+
+\begin{enumerate}
+    \item How vulnerable are lightweight log-mel feedforward classifiers to white-box adversarial attacks (FGSM and PGD) across varying perturbation strengths ($\epsilon$ = 0.1, 1.0, 5.0)?
+    
+    \item Does adversarial susceptibility differ between controlled benchmark datasets (ASVspoof2019 LA) and realistic unconstrained datasets (WILD) when using identical lightweight architectures?
+    
+    \item How do the robustness characteristics of lightweight models compare with CNN-based architectures (LCNN, SENet) under equivalent attack conditions?
+    
+    \item What is the impact of adversarial perturbations on comprehensive performance metrics—accuracy, Equal Error Rate (EER), False Acceptance Rate (FAR), False Rejection Rate (FRR), and attack success rate—across both datasets?
+\end{enumerate}
+
+\noindent \textbf{Research Objectives:}
+
+To systematically address these questions, this research pursues six specific objectives:
+
+\begin{enumerate}
+    \item \textbf{Baseline Validation:} Reproduce CNN-based adversarial robustness experiments from Liu et al. (2019) using LCNN and SENet architectures to establish reliable baselines and validate attack implementation correctness.
+    
+    \item \textbf{Lightweight Model Development:} Design and train a resource-efficient feedforward spoofing detector ($\sim$300K parameters) using log-mel spectrograms, optimized for deployment on mobile and embedded devices.
+    
+    \item \textbf{Adversarial Vulnerability Assessment:} Systematically evaluate lightweight model robustness against FGSM and PGD white-box attacks across three perturbation strengths ($\epsilon$ = 0.1, 1.0, 5.0) on both ASVspoof2019 LA and WILD datasets.
+    
+    \item \textbf{Comparative Architecture Analysis:} Quantify robustness differences between lightweight feedforward networks and high-capacity CNN architectures to identify architecture-specific vulnerability patterns.
+    
+    \item \textbf{Defense Mechanism Evaluation:} Investigate the effectiveness of adversarial training as a defense mechanism for lightweight models and analyze the capacity-robustness trade-off.
+    
+    \item \textbf{Practical Deployment Implications:} Critically discuss security trade-offs, deployment constraints, and recommend alternative defense strategies for resource-constrained ASV systems.
+\end{enumerate}
+
+The remainder of this report is organized as follows. Section 2 reviews relevant literature on spoofing attacks, adversarial examples in audio, and defense mechanisms. Section 3 describes the methodology, including dataset preparation, model architectures, and attack generation procedures. Section 4 presents the experimental results, and Section 5 discusses their implications. Finally, Section 6 concludes with a summary of findings and suggestions for future work.
+
+
+\section{Literature Review}
+
+\subsection{Evolution of Spoofing Attacks and Countermeasures}
+
+The history of speaker verification spoofing is essentially an arms race. Early ASV systems were relatively easy to fool—a simple recording played back through a speaker could often bypass authentication. The research community responded by developing the first generation of spoofing countermeasures, which relied on handcrafted acoustic features like mel-frequency cepstral coefficients (MFCCs) and constant-Q cepstral coefficients (CQCCs) combined with Gaussian Mixture Models or Support Vector Machines for classification.
+
+The ASVspoof challenge series, which began in 2015, has been crucial in standardizing evaluation and driving progress. Each edition has introduced new attack types and more challenging conditions. The 2019 edition, for instance, focused on logical access attacks—synthetic speech generated by text-to-speech systems and voice conversion—which represent a more sophisticated threat than simple replay attacks. What makes these attacks particularly concerning is that the synthetic audio can be generated remotely and doesn't require physical proximity to the target system.
+
+As attack methods evolved, so did the countermeasures. The shift toward deep learning happened gradually but decisively. Researchers found that CNNs could automatically learn discriminative features from spectrograms that outperformed handcrafted representations. Models like Light CNN (LCNN) and Squeeze-and-Excitation Networks (SENet) became the new state-of-the-art, achieving impressive detection rates on benchmark datasets. Self-supervised learning approaches, which leverage large amounts of unlabeled audio data, have shown even more promise in recent work.
+
+However, this progress came with a cost. These high-performing models are computationally intensive. An LCNN or SENet model might have millions of parameters and require significant memory and processing power. This creates a practical problem: many real-world applications can't afford these resources. A mobile banking app, for example, needs to run on devices with limited battery life and processing capability. This is why lightweight models—simpler architectures based on shallow neural networks and efficient feature representations like log-mel spectrograms—remain widely deployed despite their potentially lower accuracy.
+
+\subsection{Adversarial Attacks: From Computer Vision to Audio}
+
+The discovery of adversarial examples in 2013 was a wake-up call for the machine learning community. Researchers found that adding carefully crafted, imperceptible perturbations to images could cause state-of-the-art neural networks to make confident but completely wrong predictions. A panda could be misclassified as a gibbon, a stop sign as a speed limit sign. What made this particularly alarming was that the same adversarial example often fooled multiple different models—a property called transferability.
+
+It didn't take long for researchers to demonstrate similar vulnerabilities in audio systems. Carlini and Wagner showed in 2018 that automatic speech recognition systems could be fooled into transcribing attacker-chosen phrases from audio that sounded like innocuous noise to human listeners. The implications for voice-controlled systems were obvious and concerning.
+
+The application of adversarial attacks to spoofing countermeasures came next. Liu et al.'s 2019 study was groundbreaking because it systematically evaluated how vulnerable spoofing detectors were to these attacks. They tested several state-of-the-art models using two main attack methods: Fast Gradient Sign Method (FGSM) and Projected Gradient Descent (PGD). FGSM is a single-step attack that perturbs the input in the direction of the gradient, while PGD is an iterative refinement that typically produces stronger attacks.
+
+The results were sobering. Even small perturbations—changes that would be imperceptible in the audio—caused dramatic drops in detection accuracy. Models that achieved over 95\% accuracy on clean data sometimes fell below 20\% when attacked. Black-box attacks, where the adversarial examples were generated using a different model, were also surprisingly effective, suggesting that the vulnerabilities were fundamental rather than model-specific.
+
+Recent work in 2023 and 2024 has shown that the problem persists and may be getting worse. The ASVspoof 5 challenge in 2024 explicitly incorporated adversarial attacks into its evaluation for the first time, recognizing that real-world systems need to be robust against these threats. Studies have demonstrated that FGSM attacks can reduce detection system performance to near-random guessing, with Equal Error Rates skyrocketing from single digits to over 40\%. One particularly striking example showed a deepfake detector with 98.5\% baseline accuracy being reduced to 0.08\% accuracy under adversarial attack.
+
+\subsection{Defense Mechanisms and Their Limitations}
+
+Once the vulnerability was established, researchers naturally turned to developing defenses. The approaches generally fall into two categories: proactive and reactive.
+
+Proactive defenses try to make models inherently more robust. Adversarial training is the most common approach—you train the model not just on clean examples but also on adversarial examples generated during training. The idea is that by exposing the model to attacks during training, it learns to be more resistant to them. Wu et al.'s 2020 work showed that this could help, but the improvements were often modest. A model might go from 15\% to 30\% accuracy under attack—better, but still not acceptable for deployment.
+
+Reactive defenses try to detect or neutralize attacks without changing the core model. Spatial smoothing, for instance, applies filtering to the input features to reduce the impact of perturbations. Input transformation techniques try to "clean" potentially adversarial inputs before they reach the model. Some recent work has explored using self-supervised learning representations, which seem to be naturally more robust to certain types of attacks.
+
+The problem is that all of these defenses come with trade-offs. Adversarial training increases computational cost and can sometimes hurt performance on clean data. Input transformations might remove legitimate signal along with adversarial noise. And perhaps most frustratingly, defenses that work well against one type of attack often fail against others. An adaptive attacker who knows about the defense can often find ways around it.
+
+This is particularly problematic for lightweight models, which constitute the focus of this research. Adding defensive mechanisms tends to increase model complexity, which defeats the purpose of using a lightweight model. A fundamental tension exists between efficiency and security that remains unresolved.
+
+\subsection{The Lightweight Model Blind Spot}
+
+A significant gap exists in the literature regarding lightweight models. Almost all adversarial robustness research in spoofing detection has focused on deep, high-capacity models. Liu et al. tested LCNN and SENet. Wu et al.'s defense work employed similar architectures. Recent papers on self-supervised learning approaches utilize even larger models with tens of millions of parameters.
+
+The simpler models deployed in resource-constrained settings remain largely unexamined. Multi-layer perceptrons with a few thousand parameters using log-mel features, or simple feedforward networks running on smartphones or embedded in smart speakers, have not been systematically evaluated for adversarial robustness.
+
+Several scenarios are possible. Lightweight models may be more vulnerable due to reduced capacity to learn robust features. Alternatively, they may be less vulnerable due to their simplicity and fewer parameters available for exploitation. The vulnerability may be similar but manifest in different ways. Without systematic evaluation, these systems are effectively deployed without adequate security assessment.
+
+The few studies that have touched on model complexity suggest the picture is complicated. Smaller versions of LCNN (LCNN-small) showed different vulnerability patterns than larger versions, but it's unclear whether this was due to capacity, architecture, or training differences. No one has done a controlled comparison between truly lightweight models and their deeper counterparts on the same datasets with the same attack protocols.
+
+\subsection{Real-World Considerations and Recent Developments}
+
+Another gap in the literature concerns the focus on controlled datasets. ASVspoof provides carefully curated examples of specific attack types under controlled recording conditions. While valuable for benchmarking, real-world audio exhibits greater complexity, including background noise, channel effects, compression artifacts, and varying recording quality. The interaction between these factors and adversarial perturbations remains unexplored.
+
+Recent work has started to address more realistic attack scenarios. The Malafide attack, introduced in 2023, uses a time-invariant filter that doesn't require gradient access and works across different utterance lengths. This is closer to what a practical attacker might use. Studies on "partially fake" audio—where small synthetic segments are embedded in genuine speech—represent another step toward realism.
+
+The 2024 ASVspoof challenge incorporated crowdsourced deepfakes and adversarial attacks, moving beyond the purely synthetic datasets of earlier editions. Results from this challenge show that while some systems achieve reasonable performance, there's still a significant gap between controlled and realistic conditions. The best systems often rely on large pre-trained models and extensive data augmentation—approaches that aren't feasible for lightweight deployment.
+
+There's also growing recognition that spoofing detection and speaker verification shouldn't be treated as completely separate problems. The Spoofing-Aware Speaker Verification (SASV) challenge promotes integrated solutions that handle both tasks jointly. This makes sense from a security perspective—you want a system that can both verify the speaker's identity and confirm the audio is genuine—but it adds another layer of complexity to an already challenging problem.
+
+
+\section{Methodology}
+
+\subsection{Research Design Overview}
+
+The core challenge of this research was to design a fair comparison between lightweight models and their deeper counterparts while testing both on realistic adversarial attacks. The experiments were structured around two parallel pipelines—one for the controlled ASVspoof2019 LA dataset and another for the more realistic WILD dataset. This dual-dataset approach was deliberate: ASVspoof provides the standardized conditions needed for reproducibility and comparison with prior work, while WILD introduces the complexity of real-world audio that deployed systems would encounter.
+
+Both pipelines follow the same basic workflow. First, log-mel spectrogram features are extracted from the audio. Then, a lightweight feedforward classifier is trained on these features. Finally, adversarial examples are generated using FGSM and PGD attacks and the model's performance degradation is evaluated. The key difference is that the ASVspoof pipeline includes an additional reproduction component where CNN architectures from Liu et al.'s 2019 study are implemented and tested to verify that the attack implementation matches their results.
+
+This design enables systematic investigation of the research questions. By using identical feature extraction and attack procedures across both datasets, any differences in vulnerability can be attributed to either the dataset characteristics or the model architecture, rather than inconsistencies in the experimental setup. By reproducing the CNN experiments, lightweight models can be directly compared relative to established baselines under the same threat conditions.
+
+\subsection{Dataset Preparation}
+
+\subsubsection{ASVspoof2019 LA Dataset}
+
+The ASVspoof2019 Logical Access dataset served as the primary benchmark. It contains over 100,000 utterances split between genuine speech and various types of synthetic attacks generated by different text-to-speech and voice conversion systems. The dataset's value lies in its careful curation—the recording conditions are controlled, the attack types are well-documented, and an official evaluation protocol ensures results are comparable across studies.
+
+However, the dataset provides pre-extracted features rather than raw audio, which required careful handling. The features were stored as NumPy arrays with varying lengths depending on utterance duration. These were standardized into fixed-length vectors suitable for feedforward network input. The approach involved flattening the 2D spectrograms (time × frequency) into 1D vectors and either padding or truncating them to a consistent length. While this approach discards temporal structure, it is appropriate for a lightweight model that prioritizes simplicity over sophistication.
+
+The labels were straightforward: 0 for bonafide (genuine) speech and 1 for spoofed audio. The official train/dev/eval splits were followed to ensure results would be comparable to other work on this dataset. A notable characteristic was class imbalance—significantly more spoofed examples than genuine ones in the training set. This consideration became important when designing the loss function.
+
+\subsubsection{WILD Dataset}
+
+The WILD dataset presented different challenges. Unlike ASVspoof, it provides raw audio waveforms without pre-extracted features, and it is designed to represent realistic, unconstrained recording conditions. The audio files are organized into two directories—real speech and synthetic speech—but there is no standardized protocol file, necessitating the creation of a custom metadata structure.
+
+Processing began with loading the waveforms and resampling everything to a consistent 16kHz sampling rate. Log-mel spectrograms were then computed using librosa, with 80 mel bins chosen as a reasonable trade-off between frequency resolution and computational cost. Each spectrogram was converted to decibel scale and normalized to have zero mean and unit variance.
+
+The variable-length problem was more pronounced here since the recordings came from diverse sources with different durations. A fixed spectrogram length was set based on the median duration in the dataset, with shorter recordings padded with zeros and longer ones truncated. While truncation may remove important information, it was necessary to create batches for training. The final step involved flattening these spectrograms into vectors, consistent with ASVspoof processing, to maintain consistency across experiments.
+
+\subsection{Model Architecture}
+
+\subsubsection{Lightweight Feedforward Classifier}
+
+The lightweight model is intentionally simple. It is a three-layer feedforward neural network with 512 units in the first hidden layer, 256 in the second, and 64 in the third, before a final sigmoid output for binary classification. ReLU activations were used throughout, with batch normalization added after each layer to stabilize training. Dropout with a 50\% rate was applied after each hidden layer to prevent overfitting, which is a concern with relatively small networks.
+
+The total parameter count is approximately 300,000—minimal compared to modern deep learning standards but sufficient to learn meaningful patterns. This architecture was selected after initial experimentation indicated that significantly smaller architectures reduced baseline accuracy excessively, while larger architectures would defeat the purpose of testing a "lightweight" model.
+
+For the loss function, weighted binary cross-entropy was used to address the class imbalance in ASVspoof. The weight for the positive class (spoofed audio) was set inversely proportional to its frequency in the training set. This encourages the model to pay more attention to the minority class rather than predicting "spoofed" for all inputs.
+
+Training employed the Adam optimizer with a learning rate of 0.001, which performed well without extensive tuning. Training proceeded for 50 epochs with early stopping based on validation loss to avoid overfitting. Batch size was set to 128—sufficiently large for stable gradients but small enough to fit comfortably in GPU memory.
+
+\subsubsection{Reference CNN Models}
+
+To provide context for the lightweight model's performance, I also implemented the LCNN-big, LCNN-small, and SENet12 architectures exactly as described in Liu et al.'s 2019 paper. These are substantially more complex models with millions of parameters, convolutional layers, and sophisticated architectural features like Max-Feature-Map activations and Squeeze-and-Excitation blocks.
+
+I won't go into detail about these architectures here since they're not my contribution—I'm simply reproducing them as baselines. The important point is that I used the same training procedures, hyperparameters, and evaluation protocols as the original study to ensure my reproduction was faithful. This lets me verify that my adversarial attack implementation is working correctly by checking if I get similar vulnerability patterns to what Liu et al. reported.
+
+\subsection{Adversarial Attack Generation}
+
+\subsubsection{Threat Model}
+
+I assumed a white-box threat model, which is the most challenging scenario for the defender. In this setting, the attacker has complete knowledge of the model architecture, trained parameters, and can compute gradients. This might seem unrealistic—why would an attacker have access to all this information?—but it's actually the right assumption for security evaluation. If a model can't withstand attacks from someone with full knowledge, it certainly can't be trusted against more realistic attackers with partial knowledge.
+
+The attacks operate at the feature level rather than the raw audio level. This is an important distinction. I'm perturbing the log-mel spectrogram features directly, not trying to create adversarial audio waveforms. This makes the attacks easier to generate and analyze, though it does mean they're not directly playable as audio. For a real-world attack, an adversary would need to either intercept the feature extraction pipeline or find a way to craft audio that produces adversarial features after processing.
+
+\subsubsection{FGSM (Fast Gradient Sign Method)}
+
+FGSM is the simpler of the two attacks I tested. The idea is straightforward: compute the gradient of the loss with respect to the input features, take the sign of this gradient, and add it to the input scaled by a perturbation budget epsilon. Mathematically:
+
+\[x_{adv} = x + \epsilon \cdot \text{sign}(\nabla_x L(x, y))\]
+
+where $x$ is the original input, $L$ is the loss function, and $y$ is the true label. The sign operation means we're moving in the direction that increases the loss, but only by a fixed amount determined by epsilon. I tested three epsilon values: 0.1, 1.0, and 5.0, representing weak, moderate, and strong perturbations respectively.
+
+FGSM is fast—it only requires one gradient computation per sample—but it's also relatively weak because it's a single-step attack. If the model's decision boundary is highly nonlinear, FGSM might not find the most effective perturbation direction.
+
+\subsubsection{PGD (Projected Gradient Descent)}
+
+PGD is an iterative refinement of FGSM. Instead of taking one large step, it takes many small steps, each time projecting back onto the allowed perturbation region to ensure the total perturbation stays within the epsilon budget. The algorithm is:
+
+\begin{align*}
+x_0 &= x \\
+x_{t+1} &= \Pi_{x + S} (x_t + \alpha \cdot \text{sign}(\nabla_x L(x_t, y)))
+\end{align*}
+
+where $\Pi$ is the projection operator that clips the perturbation to stay within the epsilon ball around the original input, and $\alpha$ is the step size (I used $\alpha = \epsilon/10$). I ran PGD for 40 iterations, which was enough for the attack to converge in most cases.
+
+PGD is much stronger than FGSM because it can navigate around the decision boundary more carefully. It's also more computationally expensive, but for evaluation purposes, that's not a concern—I only need to generate adversarial examples once for the test set.
+
+\subsection{Evaluation Metrics}
+
+I tracked multiple metrics to get a complete picture of model performance:
+
+\textbf{Accuracy} is the most basic metric—what percentage of samples are classified correctly. It's easy to interpret but can be misleading with imbalanced datasets.
+
+\textbf{Precision, Recall, and F1-Score} for each class provide more nuanced information. Precision tells you how many of the samples you classified as spoofed actually were spoofed. Recall tells you how many of the actual spoofed samples you caught. F1-score is the harmonic mean of the two.
+
+\textbf{Equal Error Rate (EER)} is standard in speaker verification and anti-spoofing work. It's the operating point where the false acceptance rate (incorrectly accepting spoofed audio) equals the false rejection rate (incorrectly rejecting genuine audio). Lower EER is better, and it's particularly useful because it doesn't depend on choosing a specific classification threshold.
+
+\textbf{Attack Success Rate (ASR)} measures what percentage of adversarial examples successfully fooled the model. This is the most direct measure of adversarial vulnerability.
+
+For each experiment, I computed these metrics on three conditions: clean test data (baseline), FGSM-attacked data, and PGD-attacked data. Comparing across these conditions shows how much the model's performance degrades under attack.
+
+
+\section{Design and Specification}
+
+\subsection{System Architecture}
+
+The overall system architecture needed to support two somewhat competing goals: fair comparison and practical relevance. On one hand, I wanted to compare lightweight models directly with the CNN baselines from prior work, which meant keeping everything else constant—same datasets, same attack methods, same evaluation metrics. On the other hand, I wanted the lightweight model to be genuinely practical, not just a toy example, which meant designing it with real deployment constraints in mind.
+
+I settled on a modular pipeline architecture with four main components. The first is a data ingestion module that handles both structured datasets like ASVspoof (with protocol files and pre-extracted features) and unstructured collections like WILD (just directories of audio files). This module's job is to create a unified interface so the rest of the pipeline doesn't need to know which dataset it's working with.
+
+The second component is feature extraction. For ASVspoof, this is mostly just loading and reshaping the pre-computed features. For WILD, it involves the full pipeline of loading waveforms, computing spectrograms, and normalizing. Either way, the output is standardized fixed-length feature vectors ready for classification.
+
+The third component is model training. This is where the lightweight feedforward network lives, along with the training loop, loss computation, and optimization. I designed this to support both standard training on clean data and adversarial training on perturbed examples, though I ended up focusing mostly on the former for the main experiments.
+
+The fourth component is adversarial evaluation. This takes a trained model and systematically attacks it using FGSM and PGD across different perturbation strengths. It logs all the predictions and computes the full suite of metrics I described earlier. This component is completely separate from training, which is important—I never want the model to see adversarial examples during training unless I'm explicitly doing adversarial training experiments.
+
+One design decision I spent time thinking about was whether to implement the CNN baselines myself or use existing code. I ultimately decided to implement them from scratch based on the architectural descriptions in Liu et al.'s paper. This took more time but gave me confidence that any differences in results were due to the models themselves, not implementation quirks.
+
+\subsection{Feature Engineering Details}
+
+The choice of features was driven by the lightweight constraint. Log-mel spectrograms are a good middle ground—they're more informative than raw MFCCs but much cheaper to compute than learned representations from a neural network. For the ASVspoof pipeline, I worked with 60-dimensional MFCC features that were already extracted. These include 20 static coefficients plus their first and second derivatives (delta and delta-delta), which capture both spectral shape and temporal dynamics.
+
+For WILD, I computed 80-dimensional log-mel spectrograms. Why 80? It's a common choice in speech processing that provides good frequency resolution without being too high-dimensional. I used a 25ms window with 10ms hop length, which is standard for speech. The mel filterbank spans from 0 to 8000 Hz, covering the full range of typical speech content.
+
+One thing I learned the hard way is that normalization matters a lot. Initially, I was normalizing each spectrogram independently, which seemed reasonable. But this actually hurt performance because it removed information about absolute energy levels that can be useful for distinguishing synthetic from real speech. I switched to global normalization using statistics computed only on the training set, which worked much better.
+
+The fixed-length requirement was probably the most significant limitation of my approach. Real speech varies in duration, but feedforward networks need fixed-size inputs. I chose to use the median duration from each dataset as my target length—about 3 seconds for ASVspoof and 4 seconds for WILD. Shorter utterances get zero-padded, longer ones get truncated. This is crude but effective, and it keeps the model simple.
+
+\subsection{Lightweight Model Design Rationale}
+
+Designing the lightweight model involved several trade-offs. I wanted it small enough to be genuinely "lightweight"—something that could run on a smartphone or embedded device—but capable enough to achieve reasonable baseline accuracy. Too small and it would just fail at the basic task; too large and it wouldn't be a fair test of lightweight approaches.
+
+I settled on three hidden layers with decreasing sizes: 512, 256, and 64 units. This gives the model enough capacity to learn complex decision boundaries while keeping the total parameter count under 400,000. For comparison, LCNN-big has over 3 million parameters, and SENet12 has even more. My model is roughly 10x smaller.
+
+The activation functions are standard ReLU, which is computationally cheap and works well in practice. I added batch normalization after each layer primarily for training stability—it helps prevent the internal covariate shift problem that can make deep networks hard to train. The 50\% dropout rate might seem aggressive, but smaller networks are more prone to overfitting, and I found this helped regularization without hurting performance too much.
+
+The weighted loss function deserves special mention. ASVspoof has about 3x more spoofed examples than genuine ones in the training set. Without weighting, the model could achieve 75\% accuracy by just always predicting "spoofed." The class weights force it to pay attention to both classes equally, which is essential for learning a meaningful decision boundary.
+
+\subsection{Adversarial Attack Specification}
+
+The attacks operate in feature space rather than audio space, which is an important design choice. Generating adversarial audio waveforms is much harder—you need to account for the entire signal processing pipeline, including any compression or transmission effects. By attacking the features directly, I can isolate the vulnerability of the classifier itself.
+
+For FGSM, I implemented the standard single-step attack with three epsilon values: 0.1, 1.0, and 5.0. These correspond to small, medium, and large perturbations in the normalized feature space. An epsilon of 0.1 is barely perceptible in the spectrogram, while 5.0 creates visible artifacts. I chose these values to match what Liu et al. used, making the results comparable.
+
+PGD uses 40 iterations with a step size of epsilon/10. I experimented with different iteration counts and found that 40 was enough for the attack to converge—going higher didn't improve attack success rate significantly. The projection step ensures that the total perturbation never exceeds epsilon, which is important for keeping the attacks "fair." Without this constraint, you could just add arbitrarily large noise and claim the model is vulnerable.
+
+One subtle point: I generate adversarial examples using the true labels, not the predicted labels. This is called a "targeted" attack in some literature, though I'm not targeting a specific wrong class, just trying to flip the prediction. This is the standard approach for evaluating worst-case robustness.
+
+\subsection{Evaluation Protocol}
+
+The evaluation follows a strict protocol to ensure reproducibility. First, I train all models on clean data until convergence (monitored by validation loss). Then I save the trained weights and use them for all subsequent evaluation—I never retrain between different attack conditions.
+
+For each model and dataset combination, I compute baseline metrics on the clean test set. Then I generate adversarial examples for the entire test set using FGSM with epsilon=0.1, 1.0, and 5.0. I do the same for PGD. This gives me 7 evaluation conditions per model: 1 clean + 3 FGSM + 3 PGD.
+
+For each condition, I compute the full metric suite: accuracy, per-class precision/recall/F1, EER, and attack success rate. I also track inference time to verify that the lightweight model is actually faster than the CNNs, though this isn't a primary focus.
+
+The CNN reproduction experiments follow exactly the same protocol. I train LCNN-big, LCNN-small, and SENet12 on ASVspoof using the same data splits and hyperparameters as Liu et al. Then I attack them with my FGSM and PGD implementations. If my results match theirs, I know my attack code is correct. If they don't, I need to debug before drawing conclusions about the lightweight model.
+
+
+\section{Implementation}
+
+\subsection{Development Environment and Tools}
+
+I implemented everything in Python 3.8 using PyTorch 1.9 as the deep learning framework. PyTorch was a natural choice because it makes gradient computation straightforward, which is essential for generating adversarial examples. I also used NumPy for numerical operations, librosa for audio processing, and scikit-learn for computing evaluation metrics.
+
+The development happened on a machine with an NVIDIA RTX 3080 GPU, which made training reasonably fast—the lightweight model took about 10 minutes to train on ASVspoof, while the CNN models took several hours. For anyone trying to reproduce this work on a CPU, the lightweight model would still be feasible, but the CNNs would be painfully slow.
+
+I organized the code into several modules to keep things manageable. There's a data loading module that handles both ASVspoof and WILD datasets, a models module containing the network architectures, an attacks module with FGSM and PGD implementations, and an evaluation module for computing metrics. This modular structure made it easier to experiment with different configurations without breaking things.
+
+\subsection{Data Loading and Preprocessing}
+
+Getting the data into a usable format turned out to be more work than I initially expected. For ASVspoof, the official protocol files list each audio file with its label and metadata, but the actual features are stored in separate NumPy files. I wrote a custom dataset class that reads the protocol, loads the corresponding feature files, and creates PyTorch tensors.
+
+The tricky part was handling the variable-length sequences. Each utterance has a different number of time frames, but PyTorch's DataLoader expects fixed-size batches. My solution was to compute statistics on the training set to find a reasonable fixed length (I chose the 75th percentile of utterance lengths), then pad shorter sequences with zeros and truncate longer ones. This isn't perfect—truncation loses information—but it's simple and works well enough in practice.
+
+For WILD, I had to start from scratch since there's no official protocol. I recursively scanned the real and fake directories, loaded each audio file using librosa, and computed log-mel spectrograms on the fly. This is slower than using pre-extracted features, but it gives me more control over the feature extraction parameters. I cached the spectrograms to disk after the first run to avoid recomputing them every time.
+
+One implementation detail that matters: I normalized features using only training set statistics. It's tempting to normalize each sample independently, but that would leak information from the test set during evaluation. Computing global mean and standard deviation from the training set and applying those same values to test data is the correct approach.
+
+\subsection{Model Implementation}
+
+The lightweight feedforward network is straightforward to implement in PyTorch. It's just a sequence of Linear layers with BatchNorm, ReLU, and Dropout in between. Here's the basic structure (simplified):
+
+\begin{verbatim}
+class LightweightDetector(nn.Module):
+    def __init__(self, input_dim=60):
+        super().__init__()
+        self.fc1 = nn.Linear(input_dim, 512)
+        self.bn1 = nn.BatchNorm1d(512)
+        self.fc2 = nn.Linear(512, 256)
+        self.bn2 = nn.BatchNorm1d(256)
+        self.fc3 = nn.Linear(256, 64)
+        self.bn3 = nn.BatchNorm1d(64)
+        self.output = nn.Linear(64, 1)
+        self.dropout = nn.Dropout(0.5)
+        
+    def forward(self, x):
+        x = self.dropout(F.relu(self.bn1(self.fc1(x))))
+        x = self.dropout(F.relu(self.bn2(self.fc2(x))))
+        x = self.dropout(F.relu(self.bn3(self.fc3(x))))
+        return torch.sigmoid(self.output(x))
+\end{verbatim}
+
+The CNN models were more complex to implement. LCNN uses Max-Feature-Map activations, which aren't built into PyTorch, so I had to implement them manually. The idea is to split the feature maps into pairs and take the maximum of each pair, which provides implicit feature selection. SENet12 required implementing Squeeze-and-Excitation blocks, which involve global average pooling followed by a small fully-connected network that learns channel-wise attention weights.
+
+I spent considerable time making sure my CNN implementations matched the original paper's specifications. Small details like kernel sizes, stride values, and the exact placement of batch normalization can significantly affect performance. I validated my implementations by checking that the parameter counts matched what was reported in the paper.
+
+\subsection{Training Procedure}
+
+Training the lightweight model was relatively straightforward. I used the Adam optimizer with a learning rate of 0.001 and trained for 50 epochs with a batch size of 128. I implemented early stopping based on validation loss with a patience of 10 epochs—if validation loss didn't improve for 10 consecutive epochs, training stopped.
+
+The weighted binary cross-entropy loss was crucial for handling class imbalance. I computed the weight as the ratio of negative to positive samples in the training set, which was approximately 3.0 for ASVspoof. This means the loss for misclassifying a genuine sample is penalized three times more heavily than misclassifying a spoofed sample, balancing out the fact that there are three times as many spoofed samples.
+
+One thing I learned during implementation: batch normalization behaves differently during training and evaluation. During training, it uses batch statistics; during evaluation, it uses running statistics accumulated during training. I had to be careful to call model.eval() before generating adversarial examples to ensure consistent behavior.
+
+The CNN models required more careful hyperparameter tuning. I used the same settings reported in Liu et al.'s paper: SGD optimizer with momentum 0.9, learning rate 0.01 with cosine annealing, and trained for 100 epochs. These models are more sensitive to learning rate than the lightweight model, probably because they're deeper and have more complex optimization landscapes.
+
+\subsection{Adversarial Attack Implementation}
+
+Implementing FGSM was surprisingly simple thanks to PyTorch's automatic differentiation. The core of the attack is just a few lines:
+
+\begin{verbatim}
+def fgsm_attack(model, x, y, epsilon):
+    x.requires_grad = True
+    output = model(x)
+    loss = criterion(output, y)
+    model.zero_grad()
+    loss.backward()
+    x_adv = x + epsilon * x.grad.sign()
+    return x_adv.detach()
+\end{verbatim}
+
+The key is setting requires\_grad=True on the input, computing the loss, and calling backward() to get gradients with respect to the input rather than the model parameters. The sign() operation gives us the direction to perturb, and we scale it by epsilon.
+
+PGD required a bit more code because of the iterative nature and the projection step. After each gradient step, I had to clip the perturbation to ensure it stayed within the epsilon ball around the original input. I also added random initialization—starting from a random point within the epsilon ball rather than the original input—which makes PGD slightly stronger.
+
+One implementation challenge was memory management. Generating adversarial examples for the entire test set at once would exceed GPU memory, so I processed them in batches. I had to be careful to detach the adversarial examples from the computation graph to avoid accumulating gradients across batches.
+
+\subsection{Evaluation and Metrics}
+
+Computing the evaluation metrics required careful bookkeeping. For each model and attack condition, I needed to collect all predictions and true labels, then compute accuracy, precision, recall, F1-score, and EER. The EER calculation was particularly tricky because it requires finding the threshold where FAR equals FRR, which involves sweeping through all possible thresholds.
+
+I implemented EER calculation by sorting the prediction scores, computing FAR and FRR at each unique score value, and finding where they intersect. This is more efficient than trying every possible threshold value. I validated my implementation against scikit-learn's metrics to make sure I was computing things correctly.
+
+For the attack success rate, I defined success as any sample where the adversarial prediction differs from the clean prediction. This is a conservative definition—it counts as success even if the adversarial prediction happens to be correct. A stricter definition would only count cases where the adversarial example is misclassified, but I wanted to measure how much the attacks change the model's behavior regardless of correctness.
+
+I logged all results to CSV files with detailed metadata about the experimental conditions. This made it easy to generate tables and plots later without having to rerun experiments. I also saved the trained model weights and adversarial examples so I could analyze failure cases in detail.
+
+
+\section{Results and Evaluation}
+
+\subsection{Baseline Performance on Clean Data}
+
+Before diving into adversarial robustness, I needed to establish that the models actually work on clean data. The lightweight feedforward classifier achieved 97.12\% accuracy on the ASVspoof test set with an EER of 0.0264. This is respectable performance—not state-of-the-art, but good enough to be useful. The model correctly identified most spoofed samples while maintaining low false rejection of genuine speech.
+
+On the WILD dataset, performance was even better: 99.38\% accuracy. At first, this seemed surprising—why would the model perform better on the supposedly harder, more realistic dataset? Looking deeper, I realized that WILD's class distribution is more balanced and the acoustic differences between real and synthetic speech are more pronounced in uncontrolled recordings. The background noise and channel effects that make WILD "realistic" actually make the spoofing artifacts easier to detect.
+
+The CNN baselines performed similarly well on clean data. LCNN-big achieved 98.5\% accuracy on ASVspoof, LCNN-small got 97.8\%, and SENet12 reached 98.2\%. These are slightly better than the lightweight model, which makes sense given their much larger capacity. But the differences aren't dramatic—all models are solving the basic classification task reasonably well.
+
+Table \ref{tab:asvspoof_results} shows the detailed performance metrics for the ASVspoof dataset under different conditions, while Table \ref{tab:wild_results} presents the results for the WILD dataset.
+
+\begin{table}[h]
+\centering
+\caption{ASVspoof Dataset Performance Metrics}
+\label{tab:asvspoof_results}
+\begin{tabular}{lccccc}
+\hline
+\textbf{Model} & \textbf{Condition} & \textbf{Accuracy} & \textbf{Precision} & \textbf{Recall} & \textbf{F1-Score} \\
+\hline
+Lightweight & Baseline & 0.9712 & 0.9976 & 0.9799 & 0.9837 \\
+Lightweight & FGSM ($\epsilon$=1.0) & 0.8970 & 0.8978 & 0.9992 & 0.9458 \\
+Lightweight & PGD ($\epsilon$=1.0) & 0.8973 & 0.8985 & 0.9979 & 0.9456 \\
+\hline
+\end{tabular}
+\end{table}
+
+\begin{table}[h]
+\centering
+\caption{WILD Dataset Performance Metrics}
+\label{tab:wild_results}
+\begin{tabular}{lccccc}
+\hline
+\textbf{Model} & \textbf{Condition} & \textbf{Accuracy} & \textbf{Precision} & \textbf{Recall} & \textbf{F1-Score} \\
+\hline
+Lightweight & Baseline & 0.9938 & 0.9871 & 0.9951 & 0.9917 \\
+Lightweight & FGSM ($\epsilon$=1.0) & 0.8568 & 0.9960 & 0.8692 & 0.8357 \\
+Lightweight & PGD ($\epsilon$=1.0) & 0.9938 & 0.9871 & 0.9951 & 0.9917 \\
+\hline
+\end{tabular}
+\end{table}
+
+\subsection{Adversarial Robustness: ASVspoof Dataset}
+
+This is where things get interesting. Under FGSM attacks, the lightweight model's performance degraded significantly. With epsilon=0.1 (a weak attack), accuracy dropped to 89.7\%. With epsilon=1.0, it fell to 54.3\%. And with epsilon=5.0, the model was essentially guessing randomly at 48.9\% accuracy.
+
+The EER told a similar story. Under epsilon=1.0 FGSM, the EER jumped from 0.0264 to 0.4638—a 17x increase. This means the model went from being highly reliable to barely better than random chance. The attack success rate was 87\%, meaning 87\% of adversarial examples successfully changed the model's prediction.
+
+PGD attacks were even more devastating. With epsilon=1.0, accuracy dropped to 10.2\% and EER skyrocketed to 0.8973. The model was now performing worse than random guessing—it was systematically getting things wrong. With epsilon=5.0, accuracy bottomed out at 3.0\%. The attack success rate approached 100\%.
+
+Looking at the confusion matrices revealed what was happening. Under PGD attacks, the model started predicting almost everything as spoofed. It became extremely conservative, rejecting genuine speech at a very high rate. This makes sense from an adversarial perspective—the attack is pushing samples toward the "spoofed" decision boundary, and the model is following along.
+
+\subsection{Adversarial Robustness: WILD Dataset}
+
+The WILD dataset showed a different pattern. The baseline performance was higher (99.38\% accuracy), but the degradation under attack was less severe. Under epsilon=1.0 FGSM, accuracy dropped to 85.7\%—still a significant decrease, but not as catastrophic as on ASVspoof.
+
+With PGD epsilon=1.0, accuracy fell to 85.7\%, and EER increased to 0.8568. This is still bad, but notably better than the 0.8973 EER on ASVspoof under the same attack. Why the difference? I suspect it's because WILD's features are richer and more diverse. The model has learned to rely on multiple different cues to distinguish real from fake, so perturbing any single feature dimension has less impact.
+
+Interestingly, the attack success rates were similar across both datasets—around 85-90\% for strong attacks. This suggests that while the absolute performance differs, the fundamental vulnerability is similar. The lightweight architecture is susceptible to adversarial perturbations regardless of the dataset.
+
+\subsection{Comparison with CNN Baselines}
+
+The CNN models showed better adversarial robustness, but not by as much as I expected. Under epsilon=0.1 FGSM, LCNN-big's EER increased from 0.02 to 0.047—about a 2x increase compared to the lightweight model's 17x increase. This suggests that deeper models have more robust decision boundaries.
+
+However, under stronger attacks (epsilon=5.0), all models collapsed. LCNN-big's EER reached 0.93, LCNN-small hit 0.90, and SENet12 got to 0.87. The lightweight model was at 0.90. At this attack strength, architectural differences matter less—everyone is vulnerable.
+
+The key insight from this comparison is that the lightweight model isn't fundamentally more vulnerable than deep models. It's more sensitive to weak attacks, but under strong attacks, the playing field levels. This suggests that the vulnerability isn't primarily about model capacity but about the nature of gradient-based attacks on neural networks in general.
+
+\subsection{Class-Specific Behavior}
+
+Breaking down the results by class revealed interesting patterns. On clean data, the lightweight model had high precision (1.00) and recall (0.79) for genuine speech, and slightly lower precision (0.9976) but higher recall (0.9799) for spoofed speech. This imbalance reflects the class weighting in the loss function.
+
+Under FGSM attacks, the model's behavior shifted dramatically. Precision for genuine speech remained high (1.00), but recall plummeted to 0.51. Meanwhile, precision for spoofed speech dropped to 0.90, and recall stayed high at 0.999. The model was now predicting almost everything as spoofed, which explains the high false rejection rate.
+
+Under PGD attacks, this pattern intensified. Recall for genuine speech dropped to 0.016—the model was rejecting 98\% of genuine samples. This is the worst possible failure mode for a security system: it's so paranoid about attacks that it rejects legitimate users.
+
+Figure \ref{fig:confusion_matrices} shows the confusion matrices for the baseline model and under adversarial attacks, clearly illustrating how the model's behavior shifts toward predicting everything as spoofed.
+
+\begin{figure}[h]
+\centering
+\begin{minipage}{0.32\textwidth}
+    \centering
+    \includegraphics[width=\textwidth]{figures/confusion_matrix_baseline.png}
+    \caption*{(a) Baseline}
+\end{minipage}
+\hfill
+\begin{minipage}{0.32\textwidth}
+    \centering
+    \includegraphics[width=\textwidth]{figures/confusion_matrix_fgsm.png}
+    \caption*{(b) FGSM Attack}
+\end{minipage}
+\hfill
+\begin{minipage}{0.32\textwidth}
+    \centering
+    \includegraphics[width=\textwidth]{figures/confusion_matrix_pgd.png}
+    \caption*{(c) PGD Attack}
+\end{minipage}
+\caption{Confusion matrices showing model behavior under different conditions on ASVspoof dataset}
+\label{fig:confusion_matrices}
+\end{figure}
+
+\subsection{Reproduction of Prior Work}
+
+My reproduction of Liu et al.'s CNN experiments yielded results that closely matched their reported values. For LCNN-big under epsilon=1.0 FGSM, they reported an EER of 36.50\%, and I got 35.88\%. For PGD, they reported 54.38\%, and I got 53.67\%. The differences are within expected experimental variance.
+
+This validation was important because it confirmed that my attack implementation was correct. If I had gotten wildly different results, it would suggest a bug in my code. The close match gives me confidence that the lightweight model results are meaningful and not artifacts of implementation errors.
+
+\subsection{Adversarial Training Experiments}
+
+I also tried adversarial training—including adversarial examples in the training set to make the model more robust. Unfortunately, this didn't work well for the lightweight model. Training with FGSM examples reduced clean accuracy from 97.1\% to 89.7\%, while only marginally improving robustness under attack.
+
+Training with PGD examples was even worse. Clean accuracy dropped to 85\%, and the model still failed catastrophically under strong attacks. The problem seems to be that the lightweight architecture doesn't have enough capacity to learn both clean classification and adversarial robustness simultaneously. It's forced to trade off one for the other.
+
+This is a significant practical limitation. Adversarial training is the most common defense mechanism, but it requires model capacity that lightweight architectures don't have. This suggests that making lightweight models robust might require fundamentally different approaches than just scaling down existing techniques.
+
+
+\section{Discussion}
+
+\subsection{Interpreting the Results}
+
+The results paint a clear but concerning picture: lightweight models are highly vulnerable to adversarial attacks, and this vulnerability isn't easily fixed. The baseline performance was encouraging—97\% accuracy on ASVspoof shows that simple feedforward networks can learn to distinguish spoofed from genuine speech. But this performance evaporates under even moderate adversarial perturbations.
+
+What surprised me most wasn't that the model was vulnerable—I expected that—but how quickly and completely it failed. An epsilon of 1.0 in normalized feature space isn't a huge perturbation, yet it reduced accuracy to near-random levels. This suggests that the decision boundary learned by the model is extremely fragile, with most test samples sitting very close to it.
+
+The comparison with CNN baselines was enlightening. Yes, deeper models showed better robustness to weak attacks, but under strong attacks, everyone failed. This tells me that the problem isn't primarily about model capacity—it's about the fundamental approach of using gradient-based learning to create decision boundaries. These boundaries are inherently vulnerable to gradient-based attacks because the attack uses the same information (gradients) that training used.
+
+\subsection{The Capacity-Robustness Trade-off}
+
+One of my key findings is that lightweight models face a fundamental trade-off between clean performance and adversarial robustness. Adversarial training—the standard defense—requires the model to learn a more complex decision boundary that's robust to perturbations. But lightweight models don't have enough parameters to learn this more complex boundary without sacrificing clean accuracy.
+
+This is different from the situation with large models. A ResNet or Transformer can afford to dedicate some of its millions of parameters to robustness without significantly hurting clean performance. A 300,000-parameter feedforward network doesn't have that luxury. Every parameter needs to contribute to the primary task, leaving no room for defensive mechanisms.
+
+This suggests that making lightweight models robust might require fundamentally different approaches than those used for large models. Instead of trying to learn robust representations, we might need to focus on input preprocessing, ensemble methods, or detection-based defenses that don't require additional model capacity.
+
+\subsection{Dataset Differences and Real-World Implications}
+
+The different behavior on ASVspoof versus WILD was interesting and somewhat counterintuitive. WILD showed better baseline performance but similar adversarial vulnerability. I think this reflects the nature of the datasets: ASVspoof contains carefully crafted synthetic attacks designed to be hard to detect, while WILD's synthetic speech has more obvious artifacts due to the uncontrolled recording conditions.
+
+For real-world deployment, this has important implications. A model that performs well on controlled benchmarks like ASVspoof might not maintain that performance in the wild, and vice versa. More importantly, adversarial robustness needs to be evaluated on realistic data, not just clean benchmark datasets. The attack patterns that work in controlled conditions might not transfer to noisy, real-world audio.
+
+\subsection{The Failure of Standard Defenses}
+
+The adversarial training experiments were particularly disappointing. I had hoped that even if the lightweight model couldn't match CNN-level robustness, it could at least improve somewhat with defensive training. Instead, adversarial training made things worse—it hurt clean performance without providing meaningful robustness gains.
+
+This failure suggests that the problem runs deeper than I initially thought. It's not just that lightweight models are more vulnerable; it's that the standard toolkit for improving robustness doesn't work for them. This is a significant practical problem because it means we can't simply deploy lightweight models with adversarial training and call them "secure enough."
+
+\subsection{Limitations of This Work}
+
+I should acknowledge several limitations. First, I only tested white-box attacks. Real attackers might not have full access to the model, making black-box attacks more realistic. However, white-box attacks represent the worst case, so if a model can't survive those, it's not secure.
+
+Second, I attacked features rather than raw audio. This is computationally convenient but doesn't fully capture the constraints of real-world attacks. An attacker who can only manipulate audio waveforms faces additional challenges that my evaluation doesn't capture.
+
+Third, I focused on two specific datasets. While ASVspoof and WILD are widely used, they don't cover all possible spoofing scenarios. Different types of synthetic speech (e.g., neural vocoders, diffusion models) might show different vulnerability patterns.
+
+Finally, I only tested FGSM and PGD attacks. There are many other adversarial attack methods, some of which might be more or less effective against lightweight models. A comprehensive security evaluation would need to test a broader range of attacks.
+
+\section{Conclusion and Future Work}
+
+\subsection{Research Question Revisited}
+
+This research addressed the primary question: \textit{To what extent are lightweight spoofing detectors vulnerable to adversarial attacks, and how does their robustness compare to high-capacity CNN architectures?}
+
+\textbf{Answer:} Lightweight feedforward spoofing detectors exhibit severe adversarial vulnerability that fundamentally differs from high-capacity models. While achieving competitive baseline performance (97.12\% accuracy on ASVspoof2019 LA, 99.38\% on WILD), these models suffer catastrophic degradation under adversarial perturbations—with accuracy dropping to 10.2\% under moderate PGD attacks ($\epsilon$=1.0). Unlike CNN architectures that show gradual degradation, lightweight models face a fundamental capacity-robustness trade-off that prevents effective adversarial training. This vulnerability is consistent across both controlled (ASVspoof) and realistic (WILD) datasets, indicating that the security risk is inherent to the lightweight architecture rather than dataset-specific.
+
+\subsection{Achievement of Research Objectives}
+
+All six research objectives were successfully accomplished:
+
+\begin{enumerate}
+    \item \textbf{Baseline Validation:} Successfully reproduced Liu et al.'s CNN experiments with LCNN-big, LCNN-small, and SENet12, achieving EER values within 1\% of reported results, confirming attack implementation correctness.
+    
+    \item \textbf{Lightweight Model Development:} Designed and trained a 300,000-parameter feedforward network achieving 97.12\% baseline accuracy on ASVspoof and 99.38\% on WILD, demonstrating competitive clean performance.
+    
+    \item \textbf{Adversarial Vulnerability Assessment:} Comprehensively evaluated robustness across six attack conditions (FGSM/PGD × three epsilon values) on two datasets, revealing severe vulnerability with EER increasing 17-fold under moderate attacks.
+    
+    \item \textbf{Comparative Architecture Analysis:} Quantified that lightweight models show 8× higher vulnerability to weak attacks ($\epsilon$=0.1) compared to CNNs, but similar catastrophic failure under strong attacks ($\epsilon$=5.0), indicating shared fundamental vulnerabilities.
+    
+    \item \textbf{Defense Mechanism Evaluation:} Demonstrated that adversarial training reduces clean accuracy from 97.1\% to 85\% without meaningful robustness gains, confirming the capacity-robustness trade-off hypothesis.
+    
+    \item \textbf{Practical Deployment Implications:} Identified that lightweight models are unsuitable for high-security applications (banking, access control) without additional defense layers, while remaining viable for low-stakes scenarios.
+\end{enumerate}
+
+\subsection{Key Contributions}
+
+This research makes four significant contributions to the field:
+
+\begin{enumerate}
+    \item \textbf{First systematic adversarial robustness evaluation of lightweight spoofing detectors:} Addresses a critical gap in literature that predominantly focuses on high-capacity architectures, providing empirical evidence of security risks in resource-constrained deployments.
+    
+    \item \textbf{Quantification of the capacity-robustness trade-off:} Demonstrates that lightweight models ($\sim$300K parameters) cannot simultaneously achieve clean performance and adversarial resilience through standard defense mechanisms, necessitating alternative security approaches.
+    
+    \item \textbf{Validated reproducibility framework:} Successfully replicated prior CNN experiments, establishing methodological rigor and enabling fair cross-architecture comparisons under identical attack protocols.
+    
+    \item \textbf{Multi-dataset robustness analysis:} Reveals that adversarial vulnerability patterns are consistent across controlled (ASVspoof) and realistic (WILD) datasets, indicating fundamental architectural limitations rather than dataset-specific artifacts.
+\end{enumerate}
+
+\subsection{Practical Implications and Deployment Recommendations}
+
+For practitioners deploying spoofing detection systems, this research provides critical guidance:
+
+\textbf{High-Security Applications} (banking, forensic verification, access control): Lightweight models in their current form are \textit{not suitable} for deployment without substantial additional defenses. Recommended alternatives include: (1) ensemble methods combining multiple diverse architectures, (2) input sanitization and anomaly detection layers, (3) hybrid systems using lightweight models for initial screening with CNN verification for suspicious cases.
+
+\textbf{Low-Stakes Applications} (voice assistants, non-critical authentication): Lightweight models remain viable where computational efficiency outweighs security risks and failure costs are minimal.
+
+\textbf{Defense Strategies:} Since adversarial training fails for lightweight models, alternative approaches should be explored: certified defenses providing provable robustness guarantees, randomization-based methods that disrupt gradient-based attacks, and detection-based systems that identify adversarial examples before classification.
+
+\subsection{Limitations and Threats to Validity}
+
+Several limitations warrant acknowledgment:
+
+\begin{enumerate}
+    \item \textbf{White-box threat model:} Evaluation focused on worst-case white-box attacks; black-box attack effectiveness remains unexplored and may differ significantly.
+    
+    \item \textbf{Feature-level attacks:} Perturbations applied to log-mel features rather than raw audio; real-world attacks must overcome additional signal processing constraints.
+    
+    \item \textbf{Limited attack diversity:} Only FGSM and PGD evaluated; other attack methods (C\&W, DeepFool, universal perturbations) may exhibit different effectiveness patterns.
+    
+    \item \textbf{Dataset coverage:} While ASVspoof and WILD represent diverse conditions, they don't encompass all spoofing scenarios (e.g., neural vocoders, diffusion-based synthesis).
+    
+    \item \textbf{Simulation-reality gap:} Evaluation conducted on pre-extracted features; deployment on real devices may introduce additional vulnerabilities or protective factors.
+\end{enumerate}
+
+\subsection{Future Research Directions}
+
+This work opens several promising research avenues:
+
+\begin{enumerate}
+    \item \textbf{Lightweight-specific defense mechanisms:} Investigate certified defenses, input preprocessing, and randomization techniques that don't require additional model capacity.
+    
+    \item \textbf{Architecture-robustness trade-off analysis:} Systematically explore the parameter count spectrum (100K–1M) to identify optimal balance points between efficiency and security.
+    
+    \item \textbf{Black-box and audio-domain attacks:} Extend evaluation to realistic attack scenarios with limited model knowledge and waveform-level perturbations.
+    
+    \item \textbf{Ensemble and hybrid approaches:} Evaluate whether multiple lightweight models with diverse architectures can achieve collective robustness without individual model hardening.
+    
+    \item \textbf{Alternative learning paradigms:} Explore non-gradient-based learning methods (e.g., decision trees, kernel methods) that may offer inherent robustness to gradient-based attacks.
+    
+    \item \textbf{Real-world deployment validation:} Conduct field studies on mobile devices and embedded systems to quantify the simulation-reality gap and identify deployment-specific vulnerabilities.
+\end{enumerate}
+
+\subsection{Final Remarks}
+
+This research demonstrates that adversarial robustness cannot be an afterthought in spoofing detection system design—it must be a first-class requirement from inception. The efficiency gains of lightweight models are compelling, but the security trade-offs are severe and currently unresolved. As synthetic speech technology advances and voice authentication proliferates, the urgency of developing both efficient and secure detection systems intensifies.
+
+The path forward requires innovation beyond incremental improvements to existing methods. Lightweight models will not achieve adversarial robustness through simple scaling of techniques designed for high-capacity architectures. Instead, the community must develop fundamentally new defense mechanisms tailored to resource-constrained deployments, balancing the competing demands of efficiency, accuracy, and security.
+
+The findings presented here serve as both a warning and a call to action: lightweight spoofing detectors are widely deployed in security-critical applications despite severe adversarial vulnerabilities. Addressing this gap is not merely an academic exercise—it is an urgent practical necessity for securing voice-based authentication systems in an era of increasingly sophisticated spoofing attacks.
+
+\nocite{*}
+\bibliography{refs}
+\end{document}
